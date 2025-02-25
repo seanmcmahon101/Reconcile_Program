@@ -21,6 +21,7 @@ import uuid
 import tempfile
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
+from datetime import timedelta
 
 # Import for security
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -37,6 +38,17 @@ if not app.config['SECRET_KEY']:
     app.config['SECRET_KEY'] = os.urandom(24).hex()
     logging.warning("FLASK_SECRET_KEY not set. Using a random secret key - sessions will reset on server restart.")
 
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+app.config['SESSION_COOKIE_SECURE'] = True
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Make sessions persistent
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
 # Security enhancements
 csrf = CSRFProtect(app)
 limiter = Limiter(
@@ -997,6 +1009,8 @@ def index():
                         session['explanation_markdown'] = explanation_markdown
                         session['current_explanation_html'] = explanation_html
                         session['analyzed_file_name'] = filename
+                        # Force the session to save /////////////// modified
+                        session.modified = True
                     else:
                         error = "Failed to get explanation from Gemini API."
                 else:
@@ -1129,6 +1143,7 @@ def export_formula_docx_route():
 def chat():
     """Handles the chat functionality after sheet analysis."""
     explanation_html = session.get('current_explanation_html')
+    explanation_markdown = session.get('explanation_markdown')
     chat_history = session.get('chat_history', [])
     user_message = None
     error = None
