@@ -52,6 +52,19 @@ DEFAULT_MODEL_NAME = 'gemini-2.0-flash'
 THINKING_MODEL_NAME = 'gemini-2.0-flash-thinking-exp'
 PREMIUM_MODEL_NAME = 'gemini-2.0-pro'  # Added premium model option
 
+PROMPT_PREFIX = """
+I'll analyze this accounting/financial data comprehensively. In my analysis, I'll:
+1. Identify key accounting structures, transactions, and relationships
+2. Explain formulas and calculations with financial context
+3. Highlight reconciliation opportunities and concerns
+4. Note potential auditing issues or control weaknesses
+5. Suggest improvements to the financial data structure
+"""
+
+PROMPT_SUFFIX = """
+Please provide any specific accounting questions or financial aspects you'd like me to focus on in my analysis.
+"""
+
 # System prompts with more accounting-specific guidance
 SYSTEM_PROMPT = """You are an expert in analyzing Excel spreadsheets specifically for accounting and financial purposes.
 Focus on identifying account types, transaction patterns, financial formulas, and reconciliation structures.
