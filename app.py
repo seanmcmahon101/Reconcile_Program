@@ -2,6 +2,7 @@ import os
 import logging
 import time
 import re
+import json
 import pandas as pd
 import numpy as np
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash, make_response, jsonify
@@ -22,6 +23,7 @@ import tempfile
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
 from datetime import timedelta
+from flask.json import JSONEncoder
 
 # Import for security
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -30,25 +32,37 @@ from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+# Custom JSON encoder for NumPy types
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, pd.DataFrame):
+            return obj.to_dict()
+        elif isinstance(obj, pd.Series):
+            return obj.to_dict()
+        else:
+            return super().default(obj)
+
 # Create Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
-if not app.config['SECRET_KEY']:
+app.json_encoder = CustomJSONEncoder
+app.secret_key = os.environ.get('FLASK_SECRET_KEY')
+if not app.secret_key:
     # Generate a random key if not provided, but log a warning
-    app.config['SECRET_KEY'] = os.urandom(24).hex()
+    app.secret_key = os.urandom(24).hex()
     logging.warning("FLASK_SECRET_KEY not set. Using a random secret key - sessions will reset on server restart.")
 
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-
 # Make sessions persistent
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
 @app.before_request
 def make_session_permanent():
     session.permanent = True
+
 # Security enhancements
 csrf = CSRFProtect(app)
 limiter = Limiter(
@@ -64,19 +78,6 @@ DEFAULT_MODEL_NAME = 'gemini-2.0-flash'
 THINKING_MODEL_NAME = 'gemini-2.0-flash-thinking-exp'
 PREMIUM_MODEL_NAME = 'gemini-2.0-pro'  # Added premium model option
 
-PROMPT_PREFIX = """
-I'll analyze this accounting/financial data comprehensively. In my analysis, I'll:
-1. Identify key accounting structures, transactions, and relationships
-2. Explain formulas and calculations with financial context
-3. Highlight reconciliation opportunities and concerns
-4. Note potential auditing issues or control weaknesses
-5. Suggest improvements to the financial data structure
-"""
-
-PROMPT_SUFFIX = """
-Please provide any specific accounting questions or financial aspects you'd like me to focus on in my analysis.
-"""
-
 # System prompts with more accounting-specific guidance
 SYSTEM_PROMPT = """You are an expert in analyzing Excel spreadsheets specifically for accounting and financial purposes.
 Focus on identifying account types, transaction patterns, financial formulas, and reconciliation structures.
@@ -86,7 +87,7 @@ Format your explanations in Markdown, using headings, bullet points, and code bl
 Highlight important financial insights, potential errors in formulas, and accounting best practices."""
 
 FORMULA_SYSTEM_PROMPT = """You are an expert in creating Excel formulas specifically for accounting and financial reconciliation.
-I will describe an accounting need, and you will provide the most efficient Excel formula solution.
+Your task is to provide the most efficient Excel formula solution.
 For accounting functions, consider:
 1. Conditional logic for matching transactions across systems
 2. VLOOKUP/XLOOKUP for finding corresponding entries
@@ -120,6 +121,10 @@ In your detailed reconciliation report, identify and explain:
 
 Format your report professionally with clear headings, tables for numerical comparisons, and executive summary.
 Include specific account codes, amounts, and variance calculations where relevant."""
+
+# Don't forget these important prompt components
+PROMPT_PREFIX = "The Excel sheet contains the following information in a structured way:\n"
+PROMPT_SUFFIX = "\nPlease provide a detailed explanation in Markdown format. Explain what this sheet is about, what each column/section represents, and how the data is structured and what its purpose might be. If there are formulas, explain their logic in simple terms. Structure your answer with headings, bullet points, and code blocks where appropriate for formulas or data examples to enhance readability."
 
 UPLOAD_FOLDER = tempfile.mkdtemp()  # Use temporary directory for security
 ALLOWED_EXTENSIONS = {'xlsx', 'xls', 'csv'}
@@ -214,6 +219,25 @@ def load_user(user_id):
     return None
 
 # --- Helper Functions ---
+def make_session_safe(data):
+    """Convert data to JSON-serializable format safe for session storage."""
+    if isinstance(data, dict):
+        return {str(key): make_session_safe(value) for key, value in data.items()}
+    elif isinstance(data, list):
+        return [make_session_safe(item) for item in data]
+    elif isinstance(data, (np.integer, np.int64)):
+        return int(data)
+    elif isinstance(data, (np.floating, np.float64)):
+        return float(data)
+    elif isinstance(data, np.ndarray):
+        return make_session_safe(data.tolist())
+    elif isinstance(data, pd.DataFrame):
+        return data.to_dict()
+    elif isinstance(data, pd.Series):
+        return make_session_safe(data.to_dict())
+    else:
+        return data
+
 def configure_api():
     """Configures the Gemini API with the API key with error handling."""
     if not API_KEY:
@@ -384,7 +408,7 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
 
     for df_idx, df in [(1, df1), (2, df2)]:
         for col in df.select_dtypes(include=['number']).columns:
-            numeric_totals[f'df{df_idx}'][col] = df[col].sum()
+            numeric_totals[f'df{df_idx}'][col] = float(df[col].sum())  # Convert to Python float
 
     analysis['numeric_totals'] = numeric_totals
 
@@ -431,21 +455,21 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
                         if isinstance(val1, (int, float, Decimal)) and isinstance(val2, (int, float, Decimal)):
                             if abs(float(val1) - float(val2)) > tolerance:
                                 analysis['value_differences'].append({
-                                    'row_df1': idx1,
-                                    'row_df2': row2.name,
-                                    'column_df1': col1,
-                                    'column_df2': col2,
-                                    'value_df1': val1,
-                                    'value_df2': val2,
-                                    'difference': float(val1) - float(val2)
+                                    'row_df1': int(idx1) if isinstance(idx1, (np.integer, np.int64)) else idx1,
+                                    'row_df2': int(row2.name) if isinstance(row2.name, (np.integer, np.int64)) else row2.name,
+                                    'column_df1': str(col1),
+                                    'column_df2': str(col2),
+                                    'value_df1': float(val1) if isinstance(val1, (np.floating, np.float64)) else val1,
+                                    'value_df2': float(val2) if isinstance(val2, (np.floating, np.float64)) else val2,
+                                    'difference': float(float(val1) - float(val2))
                                 })
                         # Otherwise check for exact match
                         elif val1 != val2:
                             analysis['value_differences'].append({
-                                'row_df1': idx1,
-                                'row_df2': row2.name,
-                                'column_df1': col1,
-                                'column_df2': col2,
+                                'row_df1': int(idx1) if isinstance(idx1, (np.integer, np.int64)) else idx1,
+                                'row_df2': int(row2.name) if isinstance(row2.name, (np.integer, np.int64)) else row2.name,
+                                'column_df1': str(col1),
+                                'column_df2': str(col2),
                                 'value_df1': val1,
                                 'value_df2': val2,
                                 'difference': 'Non-numeric difference'
@@ -453,8 +477,10 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
 
             if not match_found:
                 analysis['missing_in_df2'].append({
-                    'row': idx1,
-                    'data': row1.to_dict()
+                    'row': int(idx1) if isinstance(idx1, (np.integer, np.int64)) else idx1,
+                    'data': {k: (float(v) if isinstance(v, (np.floating, np.float64)) else 
+                                (int(v) if isinstance(v, (np.integer, np.int64)) else v)) 
+                             for k, v in row1.to_dict().items()}
                 })
 
         # Find rows in df2 that don't match any in df1
@@ -482,10 +508,17 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
 
             if not match_found:
                 analysis['missing_in_df1'].append({
-                    'row': idx2,
-                    'data': row2.to_dict()
+                    'row': int(idx2) if isinstance(idx2, (np.integer, np.int64)) else idx2,
+                    'data': {k: (float(v) if isinstance(v, (np.floating, np.float64)) else 
+                                (int(v) if isinstance(v, (np.integer, np.int64)) else v)) 
+                             for k, v in row2.to_dict().items()}
                 })
 
+    # Convert numpy types to Python native types for safe serialization
+    analysis['matching_rows'] = int(analysis['matching_rows'])
+    analysis['duplicates_df1'] = int(analysis['duplicates_df1'])
+    analysis['duplicates_df2'] = int(analysis['duplicates_df2'])
+    
     return analysis
 
 def create_reconciliation_excel(df1, df2, analysis, file_path):
@@ -666,10 +699,10 @@ def build_prompt_reconciliation(sheet1_data, sheet2_data):
     full_prompt = RECONCILIATION_SYSTEM_PROMPT + "\n\n" + prompt_content
 
     # Cache the analysis for later use
-    session['reconciliation_analysis_data'] = {
+    session['reconciliation_analysis_data'] = make_session_safe({
         'matching_columns': matching_columns if 'matching_columns' in locals() else None,
         'analysis': analysis if 'analysis' in locals() else None
-    }
+    })
 
     logging.info("Enhanced reconciliation prompt built successfully.")
     return full_prompt
@@ -1009,7 +1042,7 @@ def index():
                         session['explanation_markdown'] = explanation_markdown
                         session['current_explanation_html'] = explanation_html
                         session['analyzed_file_name'] = filename
-                        # Force the session to save /////////////// modified
+                        # Mark session as modified to ensure it's saved
                         session.modified = True
                     else:
                         error = "Failed to get explanation from Gemini API."
@@ -1092,6 +1125,7 @@ def formula_creator():
                 formula_explanation_html = markdown.markdown(formula_explanation_markdown)
                 session['formula_explanation_markdown'] = formula_explanation_markdown
                 session['formula_request'] = formula_request
+                session.modified = True  # Ensure session is saved
             else:
                 error = "Failed to get formula explanation from Gemini API."
         else:
@@ -1147,8 +1181,13 @@ def chat():
     chat_history = session.get('chat_history', [])
     user_message = None
     error = None
+    
+    # Log session data for debugging
+    logging.info(f"Session keys: {list(session.keys())}")
+    logging.info(f"Has explanation HTML: {'current_explanation_html' in session}")
+    logging.info(f"Has explanation markdown: {'explanation_markdown' in session}")
 
-    if explanation_html is None:
+    if not explanation_html or not explanation_markdown:
         flash("Please analyze a spreadsheet first.", "error")
         return redirect(url_for('index'))
 
@@ -1162,7 +1201,7 @@ def chat():
                 chat_context += f"User: {msg['user']}\nAssistant: {msg['bot']}\n\n"
 
             prompt_context = (
-                f"The analysis of the Excel sheet is:\n\n{session.get('explanation_markdown')}\n\n"
+                f"The analysis of the Excel sheet is:\n\n{explanation_markdown}\n\n"
                 f"Recent chat history:\n{chat_context}\n\n"
                 f"User's new question: {user_message}\n\n"
                 f"You're a financial and accounting expert. Answer the question specifically about the Excel sheet that was analyzed."
@@ -1174,6 +1213,7 @@ def chat():
                 llm_response_html = markdown.markdown(llm_response_markdown)
                 chat_history.append({'user': user_message, 'bot': llm_response_markdown})  # Store markdown version
                 session['chat_history'] = chat_history
+                session.modified = True  # Ensure session is saved
             else:
                 error = "Failed to get chat response from Gemini API."
         else:
@@ -1307,16 +1347,19 @@ def reconcile():
                         # Store path for download
                         session['reconciliation_excel_path'] = recon_excel_path
 
-                        # Store matching columns and analysis in session
-                        session['reconciliation_analysis'] = {
+                        # Store matching columns and analysis in session - convert all to JSON-safe types
+                        reconciliation_analysis = {
                             'matching_columns': {str(k): str(v) for k, v in matching_columns.items()},
-                            'total_rows_1': len(df1),
-                            'total_rows_2': len(df2),
-                            'matching_rows': analysis['matching_rows'],
-                            'missing_in_2': len(analysis['missing_in_df2']),
-                            'missing_in_1': len(analysis['missing_in_df1']),
-                            'value_differences': len(analysis['value_differences'])
+                            'total_rows_1': int(len(df1)),
+                            'total_rows_2': int(len(df2)),
+                            'matching_rows': int(analysis['matching_rows']),
+                            'missing_in_2': int(len(analysis['missing_in_df2'])),
+                            'missing_in_1': int(len(analysis['missing_in_df1'])),
+                            'value_differences': int(len(analysis['value_differences']))
                         }
+                        
+                        # Make sure all values are JSON-serializable
+                        session['reconciliation_analysis'] = make_session_safe(reconciliation_analysis)
 
                     # Get AI explanation
                     prompt = build_prompt_reconciliation(sheet1_data, sheet2_data)
@@ -1325,6 +1368,7 @@ def reconcile():
                     if reconciliation_markdown:
                         reconciliation_explanation_html = markdown.markdown(reconciliation_markdown)
                         session['reconciliation_explanation_markdown'] = reconciliation_markdown
+                        session.modified = True  # Ensure session is saved
                     else:
                         error = "Failed to get reconciliation explanation from Gemini API."
                 else:
@@ -1427,6 +1471,22 @@ def api_status():
             'message': 'API connection failed'
         }), 500
 
+# Debugging endpoint for session data
+@app.route('/debug-session')
+@login_required
+def debug_session():
+    """View session data for debugging."""
+    if not current_user.is_admin():
+        flash("You don't have permission to access this page.", "error")
+        return redirect(url_for('index'))
+        
+    return jsonify({
+        'session_keys': list(session.keys()),
+        'has_explanation_html': 'current_explanation_html' in session,
+        'has_explanation_markdown': 'explanation_markdown' in session,
+        'user': current_user.username
+    })
+
 # Error handlers
 @app.errorhandler(404)
 def page_not_found(e):
@@ -1434,6 +1494,7 @@ def page_not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
+    logging.error(f"500 error: {str(e)}", exc_info=True)
     return render_template('error.html', error="Internal server error"), 500
 
 # Admin dashboard
