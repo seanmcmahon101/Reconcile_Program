@@ -1,0 +1,133 @@
+{% extends "layout.html" %}
+
+{% block title %}Excel Analysis - Reconciliation System{% endblock %}
+
+{% block extra_head %}
+<style>
+    .explanation-container {
+        border-left: 4px solid #007bff;
+        padding-left: 15px;
+    }
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    .loading-text {
+        margin-top: 20px;
+        font-size: 1.2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">Excel Sheet Analysis</h2>
+                <span class="badge bg-light text-primary">Step 1</span>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data" id="uploadForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="excel_file" class="form-label">Upload Excel Spreadsheet</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-file-excel"></i></span>
+                            <input type="file" class="form-control" id="excel_file" name="excel_file" accept=".xlsx,.xls,.csv" required>
+                        </div>
+                        <div class="form-text">Supported formats: .xlsx, .xls, .csv</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="model_select" class="form-label">Analysis Model</label>
+                        <select class="form-select" id="model_select" name="model_select">
+                            <option value="default" {% if model_name == 'gemini-2.0-flash' %}selected{% endif %}>Standard Analysis</option>
+                            <option value="thinking" {% if model_name == 'gemini-2.0-flash-thinking-exp' %}selected{% endif %}>Detailed Analysis</option>
+                            <option value="premium" {% if model_name == 'gemini-2.0-pro' %}selected{% endif %}>Premium Analysis</option>
+                        </select>
+                        <div class="form-text">Premium analysis provides more in-depth financial insights</div>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary" id="analyzeBtn">
+                            <i class="fas fa-search me-2"></i>Analyze Spreadsheet
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if explanation_html %}
+<div class="row">
+    <div class="col">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <h3 class="h4 mb-0">Analysis Results</h3>
+                <div>
+                    <a href="{{ url_for('export_docx_route') }}" class="btn btn-light btn-sm">
+                        <i class="fas fa-file-word me-1"></i>Export to DOCX
+                    </a>
+                    <a href="{{ url_for('chat') }}" class="btn btn-light btn-sm ms-2">
+                        <i class="fas fa-comments me-1"></i>Chat about Results
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="explanation-container">
+                    {{ explanation_html|safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="alert alert-danger">
+    <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+</div>
+{% endif %}
+
+{% if processing %}
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <div class="loading-text">Analyzing your spreadsheet... Please wait.</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('uploadForm').addEventListener('submit', function() {
+        const fileInput = document.getElementById('excel_file');
+        if (fileInput.files.length > 0) {
+            const loadingOverlay = document.createElement('div');
+            loadingOverlay.className = 'loading-overlay';
+            loadingOverlay.innerHTML = `
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="loading-text">Analyzing your spreadsheet... Please wait.</div>
+            `;
+            document.body.appendChild(loadingOverlay);
+            
+            // Disable the button to prevent multiple submissions
+            document.getElementById('analyzeBtn').disabled = true;
+        }
+    });
+</script>
+{% endblock %}

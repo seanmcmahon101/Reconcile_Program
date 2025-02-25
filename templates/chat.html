@@ -1,0 +1,132 @@
+{% extends "layout.html" %}
+
+{% block title %}Chat with AI - Reconciliation System{% endblock %}
+
+{% block extra_head %}
+<style>
+    .explanation-container {
+        border-left: 4px solid #007bff;
+        padding-left: 15px;
+        margin-bottom: 20px;
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .chat-container {
+        max-height: 500px;
+        overflow-y: auto;
+        margin-bottom: 20px;
+    }
+    .message {
+        margin-bottom: 15px;
+        padding: 10px 15px;
+        border-radius: 5px;
+    }
+    .user-message {
+        background-color: #e9ecef;
+        margin-left: 25%;
+        border-left: 4px solid #6c757d;
+    }
+    .bot-message {
+        background-color: #f0f7ff;
+        margin-right: 25%;
+        border-left: 4px solid #007bff;
+    }
+    .message-header {
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .user-header {
+        color: #495057;
+    }
+    .bot-header {
+        color: #007bff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h2 class="h4 mb-0">Chat about {{ filename }}</h2>
+                <a href="{{ url_for('export_chat_docx_route') }}" class="btn btn-light btn-sm">
+                    <i class="fas fa-file-word me-1"></i>Export Chat
+                </a>
+            </div>
+            <div class="card-body">
+                <h3 class="h5 mb-3">Sheet Analysis Summary</h3>
+                <div class="explanation-container">
+                    {{ explanation_html|safe }}
+                </div>
+                
+                <h3 class="h5 mb-3">Chat with AI about this sheet</h3>
+                
+                <div class="chat-container">
+                    {% if chat_history %}
+                        {% for message in chat_history %}
+                            <div class="message user-message">
+                                <div class="message-header user-header">
+                                    <i class="fas fa-user me-2"></i>You
+                                </div>
+                                {{ message.user }}
+                            </div>
+                            <div class="message bot-message">
+                                <div class="message-header bot-header">
+                                    <i class="fas fa-robot me-2"></i>AI Assistant
+                                </div>
+                                {{ message.bot|safe }}
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-comments fa-3x mb-3"></i>
+                            <p>Ask a question about the sheet to start the conversation</p>
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <form method="post" id="chatForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label for="chat_message" class="form-label">Your Question</label>
+                        <textarea class="form-control" id="chat_message" name="chat_message" rows="2" 
+                            placeholder="Ask a question about the Excel sheet..." required></textarea>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary" id="sendBtn">
+                            <i class="fas fa-paper-plane me-2"></i>Send Question
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">
+    <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-scroll to bottom of chat
+    const chatContainer = document.querySelector('.chat-container');
+    if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    // Show loading indicator
+    document.getElementById('chatForm').addEventListener('submit', function() {
+        document.getElementById('sendBtn').innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Processing...';
+        document.getElementById('sendBtn').disabled = true;
+    });
+</script>
+{% endblock %}

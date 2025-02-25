@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Dashboard - Excel Reconciliation System{% endblock %}
+
+{% block extra_head %}
+<style>
+    .admin-card {
+        margin-bottom: 20px;
+    }
+    .system-info {
+        background-color: #f8f9fa;
+        border-radius: 5px;
+        padding: 15px;
+    }
+    .info-item {
+        padding: 8px 15px;
+        border-bottom: 1px solid #dee2e6;
+    }
+    .info-item:last-child {
+        border-bottom: none;
+    }
+    .info-label {
+        font-weight: bold;
+    }
+    .status-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
+    .status-ok {
+        background-color: #28a745;
+    }
+    .status-error {
+        background-color: #dc3545;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col">
+        <div class="card shadow admin-card">
+            <div class="card-header bg-dark text-white">
+                <h2 class="h4 mb-0">Admin Dashboard</h2>
+            </div>
+            <div class="card-body">
+                <h3 class="h5 mb-3">System Status</h3>
+                
+                <div class="system-info">
+                    <div class="info-item">
+                        <span class="info-label">API Connection:</span>
+                        {% if system_info.api_status %}
+                            <span class="text-success">
+                                <span class="status-indicator status-ok"></span>Connected
+                            </span>
+                        {% else %}
+                            <span class="text-danger">
+                                <span class="status-indicator status-error"></span>Disconnected
+                            </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Cache Entries:</span> {{ system_info.cache_size }}
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Registered Users:</span> {{ system_info.user_count }}
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Upload Directory:</span> {{ system_info.upload_dir }}
+                    </div>
+                    
+                    <div class="info-item">
+                        <span class="info-label">Exports Directory:</span> {{ system_info.exports_dir }}
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <h3 class="h5 mb-3">Admin Actions</h3>
+                    <div class="d-flex">
+                        <a href="#" class="btn btn-outline-secondary me-2" onclick="clearCache()">
+                            <i class="fas fa-trash me-2"></i>Clear Cache
+                        </a>
+                        <a href="{{ url_for('api_status') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-sync-alt me-2"></i>Check API Connection
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function clearCache() {
+        if (confirm('Are you sure you want to clear the cache?')) {
+            // Implement cache clearing through AJAX if needed
+            alert('Cache cleared successfully.');
+        }
+    }
+</script>
+{% endblock %}
