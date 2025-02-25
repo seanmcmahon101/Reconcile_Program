@@ -23,7 +23,11 @@ import tempfile
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
 from datetime import timedelta
-from flask.json import JSONEncoder
+try:
+    from flask.json import JSONEncoder
+except ImportError:
+    # For Flask 2.3+
+    from flask.json.provider import JSONEncoder
 
 # Import for security
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
