@@ -23,11 +23,16 @@ import tempfile
 from decimal import Decimal, ROUND_HALF_UP
 import hashlib
 from datetime import timedelta
-try:
-    from flask.json import JSONEncoder
-except ImportError:
-    # For Flask 2.3+
+
+# Flask version check for JSONEncoder import
+import flask
+FLASK_VERSION = flask.__version__
+print(f"Flask version: {FLASK_VERSION}") # Print Flask version for debugging
+
+if flask.version_info >= (2, 3):
     from flask.json.provider import JSONEncoder
+else:
+    from flask.json import JSONEncoder
 
 # Import for security
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
@@ -46,7 +51,7 @@ class CustomJSONEncoder(JSONEncoder):
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
         elif isinstance(obj, pd.DataFrame):
-            return obj.to_dict()
+            return obj.to_dict(orient='records') # Use orient='records' for better JSON serialization of DataFrames
         elif isinstance(obj, pd.Series):
             return obj.to_dict()
         else:
@@ -86,7 +91,6 @@ PREMIUM_MODEL_NAME = 'gemini-2.0-pro'  # Added premium model option
 SYSTEM_PROMPT = """You are an expert in analyzing Excel spreadsheets specifically for accounting and financial purposes.
 Focus on identifying account types, transaction patterns, financial formulas, and reconciliation structures.
 Explain the purpose, structure, and formulas in a clear and detailed manner appropriate for accounting professionals.
-For financial data, identify the accounting principles being applied (like GAAP, IFRS) where possible.
 Format your explanations in Markdown, using headings, bullet points, and code blocks for readability.
 Highlight important financial insights, potential errors in formulas, and accounting best practices."""
 
@@ -149,7 +153,7 @@ CACHE_TIMEOUT = 3600  # 1 hour
 # Enhanced logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(module)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(module)s - %(module)s - %(message)s', # Added module name to logging format
     handlers=[
         logging.FileHandler("app.log"),
         logging.StreamHandler()
@@ -236,7 +240,7 @@ def make_session_safe(data):
     elif isinstance(data, np.ndarray):
         return make_session_safe(data.tolist())
     elif isinstance(data, pd.DataFrame):
-        return data.to_dict()
+        return data.to_dict(orient='records') # Use orient='records' for better JSON serialization of DataFrames
     elif isinstance(data, pd.Series):
         return make_session_safe(data.to_dict())
     else:
@@ -482,8 +486,8 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
             if not match_found:
                 analysis['missing_in_df2'].append({
                     'row': int(idx1) if isinstance(idx1, (np.integer, np.int64)) else idx1,
-                    'data': {k: (float(v) if isinstance(v, (np.floating, np.float64)) else 
-                                (int(v) if isinstance(v, (np.integer, np.int64)) else v)) 
+                    'data': {k: (float(v) if isinstance(v, (np.floating, np.float64)) else
+                                (int(v) if isinstance(v, (np.integer, np.int64)) else v))
                              for k, v in row1.to_dict().items()}
                 })
 
@@ -513,8 +517,8 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
             if not match_found:
                 analysis['missing_in_df1'].append({
                     'row': int(idx2) if isinstance(idx2, (np.integer, np.int64)) else idx2,
-                    'data': {k: (float(v) if isinstance(v, (np.floating, np.float64)) else 
-                                (int(v) if isinstance(v, (np.integer, np.int64)) else v)) 
+                    'data': {k: (float(v) if isinstance(v, (np.floating, np.float64)) else
+                                (int(v) if isinstance(v, (np.integer, np.int64)) else v))
                              for k, v in row2.to_dict().items()}
                 })
 
@@ -522,7 +526,7 @@ def identify_discrepancies(df1, df2, matching_columns=None, tolerance=0.01):
     analysis['matching_rows'] = int(analysis['matching_rows'])
     analysis['duplicates_df1'] = int(analysis['duplicates_df1'])
     analysis['duplicates_df2'] = int(analysis['duplicates_df2'])
-    
+
     return analysis
 
 def create_reconciliation_excel(df1, df2, analysis, file_path):
@@ -1185,7 +1189,7 @@ def chat():
     chat_history = session.get('chat_history', [])
     user_message = None
     error = None
-    
+
     # Log session data for debugging
     logging.info(f"Session keys: {list(session.keys())}")
     logging.info(f"Has explanation HTML: {'current_explanation_html' in session}")
@@ -1361,7 +1365,7 @@ def reconcile():
                             'missing_in_1': int(len(analysis['missing_in_df1'])),
                             'value_differences': int(len(analysis['value_differences']))
                         }
-                        
+
                         # Make sure all values are JSON-serializable
                         session['reconciliation_analysis'] = make_session_safe(reconciliation_analysis)
 
@@ -1483,7 +1487,7 @@ def debug_session():
     if not current_user.is_admin():
         flash("You don't have permission to access this page.", "error")
         return redirect(url_for('index'))
-        
+
     return jsonify({
         'session_keys': list(session.keys()),
         'has_explanation_html': 'current_explanation_html' in session,
