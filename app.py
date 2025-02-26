@@ -1,111 +1,5 @@
 # Flask application for Excel file analysis, formula creation, and account reconciliation
 # Using Google's Gemini AI for intelligent processing and analysis
-# Add tracking for user activities with a simple in-memory store
-# This could be expanded to use a database in production
-
-# At the top of app.py with other imports
-from collections import deque
-import time
-
-# Add activity tracking
-user_activities = {}
-MAX_ACTIVITIES = 10
-
-def track_activity(user_id, activity_type, details=None):
-    """Tracks user activity for the dashboard."""
-    if user_id not in user_activities:
-        user_activities[user_id] = deque(maxlen=MAX_ACTIVITIES)
-
-    user_activities[user_id].appendleft({
-        'type': activity_type,
-        'timestamp': time.time(),
-        'details': details or {}
-    })
-
-# Then modify your routes to track activities
-@app.route('/', methods=['GET', 'POST'])
-@login_required
-def index():
-    """Handles the main application logic or redirects to dashboard."""
-    # For a logged-in user without active analysis, redirect to dashboard
-    if request.method == 'GET' and not session.get('current_explanation_html'):
-        return redirect(url_for('dashboard'))
-
-    # Rest of your existing index route code here
-    # Add tracking when analysis is completed:
-    if explanation_html:
-        track_activity(
-            current_user.id,
-            'analysis',
-            {'filename': secure_filename(file.filename)}
-        )
-    # ...
-
-# Add a new dashboard route
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    """Displays the user dashboard with recent activities and system status."""
-    # Get user's recent activities
-    activities = []
-    if current_user.id in user_activities:
-        raw_activities = list(user_activities[current_user.id])
-
-        for activity in raw_activities:
-            activity_type = activity['type']
-            details = activity['details']
-            timestamp = datetime.datetime.fromtimestamp(activity['timestamp'])
-
-            if activity_type == 'analysis':
-                activities.append({
-                    'title': 'Sheet Analysis',
-                    'description': f"Analyzed {details.get('filename', 'a sheet')}",
-                    'time': timestamp.strftime('%Y-%m-%d %H:%M'),
-                    'icon': 'fa-file-excel',
-                    'icon_class': 'bg-light-primary text-primary'
-                })
-            elif activity_type == 'formula':
-                activities.append({
-                    'title': 'Formula Creation',
-                    'description': details.get('description', 'Created a formula'),
-                    'time': timestamp.strftime('%Y-%m-%d %H:%M'),
-                    'icon': 'fa-calculator',
-                    'icon_class': 'bg-light-success text-success'
-                })
-            elif activity_type == 'reconciliation':
-                activities.append({
-                    'title': 'Account Reconciliation',
-                    'description': f"Reconciled {details.get('file1', 'Sheet 1')} with {details.get('file2', 'Sheet 2')}",
-                    'time': timestamp.strftime('%Y-%m-%d %H:%M'),
-                    'icon': 'fa-balance-scale',
-                    'icon_class': 'bg-light-warning text-warning'
-                })
-
-    # Get system stats
-    api_status, _ = test_api_connection()
-
-    # Placeholder stats (in production, you'd get these from a database)
-    stats = {
-        'analyses_count': sum(1 for acts in user_activities.get(current_user.id, [])
-                            if acts['type'] == 'analysis'),
-        'formulas_count': sum(1 for acts in user_activities.get(current_user.id, [])
-                             if acts['type'] == 'formula'),
-        'reconciliations_count': sum(1 for acts in user_activities.get(current_user.id, [])
-                                   if acts['type'] == 'reconciliation')
-    }
-
-    return render_template(
-        'dashboard.html',
-        stats=stats,
-        recent_activities=activities,
-        system_status={
-            'api_connected': api_status,
-            'current_model': DEFAULT_MODEL_NAME,
-            'last_update': datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
-        },
-        current_user=current_user
-    )
-
 import os
 import logging
 import datetime
@@ -122,7 +16,8 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 
-app = Flask(__name__)
+app = Flask(__name__) # Initialize Flask app here, before using it
+
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'your_default_secret_key')
 app.config['SESSION_COOKIE_SECURE'] = True  # Use secure cookies in production
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access to session cookie
@@ -348,14 +243,14 @@ def load_excel_data(file_path):
 def build_prompt_reconciliation(sheet1, sheet2):
     """Builds the prompt for Gemini API for reconciliation, comparing two sheets."""
     prompt_content = "Sheet 1 Data:\n"
-    
+
     # Get header row from first sheet for column names
     headers1 = []
     for cell in sheet1[1]:
         headers1.append(str(cell.value) if cell.value is not None else "Unnamed Column")
-    
+
     prompt_content += "Headers: " + ", ".join(headers1) + "\n\n"
-    
+
     # Get data rows from first sheet
     for row_idx, row in enumerate(sheet1.iter_rows(min_row=2, max_row=sheet1.max_row, min_col=1, max_col=sheet1.max_column), start=2):
         row_values = []
@@ -370,14 +265,14 @@ def build_prompt_reconciliation(sheet1, sheet2):
 
     # Similar processing for second sheet
     prompt_content += "\nSheet 2 Data:\n"
-    
+
     # Get header row from second sheet
     headers2 = []
     for cell in sheet2[1]:
         headers2.append(str(cell.value) if cell.value is not None else "Unnamed Column")
-    
+
     prompt_content += "Headers: " + ", ".join(headers2) + "\n\n"
-    
+
     # Get data rows from second sheet
     for row_idx, row in enumerate(sheet2.iter_rows(min_row=2, max_row=sheet2.max_row, min_col=1, max_col=sheet2.max_column), start=2):
         row_values = []
@@ -393,21 +288,21 @@ def build_prompt_reconciliation(sheet1, sheet2):
     prompt_content += "\nReconciliation Metadata:\n"
     prompt_content += f"- Sheet 1 has {sheet1.max_row} rows and {sheet1.max_column} columns\n"
     prompt_content += f"- Sheet 2 has {sheet2.max_row} rows and {sheet2.max_column} columns\n"
-    
+
     # Identify common column names for potential matching keys
     common_headers = set(headers1).intersection(set(headers2))
     prompt_content += f"- Common column headers: {', '.join(common_headers)}\n"
-    
+
     # Check for potential ID columns
     id_columns = [header for header in common_headers if 'id' in header.lower() or 'code' in header.lower() or 'key' in header.lower()]
     if id_columns:
         prompt_content += f"- Potential matching key columns: {', '.join(id_columns)}\n"
-    
+
     # Check for date columns
     date_columns = [header for header in common_headers if 'date' in header.lower() or 'time' in header.lower()]
     if date_columns:
         prompt_content += f"- Date-related columns: {', '.join(date_columns)}\n"
-    
+
     # Check for amount columns
     amount_columns = [header for header in common_headers if 'amount' in header.lower() or 'value' in header.lower() or 'total' in header.lower()]
     if amount_columns:
@@ -421,21 +316,21 @@ def build_prompt_reconciliation(sheet1, sheet2):
 def build_prompt(sheet):
     """Builds the prompt for the Gemini API based on the Excel sheet data."""
     prompt_content = ""
-    
+
     # Extract sheet metadata
     prompt_content += f"Excel Sheet Metadata:\n"
     prompt_content += f"- Sheet name: {sheet.title}\n"
     prompt_content += f"- Total rows: {sheet.max_row}\n"
     prompt_content += f"- Total columns: {sheet.max_column}\n\n"
-    
+
     # Get column headers (assuming first row contains headers)
     headers = []
     for cell in sheet[1]:
         header_value = str(cell.value) if cell.value is not None else "Unnamed Column"
         headers.append(header_value)
-        
+
     prompt_content += f"Column Headers: {', '.join(headers)}\n\n"
-    
+
     # Sample data - first 5 rows for context
     prompt_content += "Sample Data (First 5 rows):\n"
     for row_idx, row in enumerate(sheet.iter_rows(min_row=2, max_row=min(sheet.max_row, 6), min_col=1, max_col=sheet.max_column), start=2):
@@ -445,18 +340,18 @@ def build_prompt(sheet):
                 row_values.append(f"{headers[cell.column-1]}: {cell.value}")
         if row_values:
             prompt_content += f"- Row {row_idx}: {', '.join(row_values)}\n"
-    
+
     prompt_content += "\nDetailed Cell Information:\n"
-    
+
     # Track formulas for special attention
     formulas = []
-    
+
     # Process all non-empty cells
     for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column):
         for cell in row:
             if cell.value is not None or cell.comment is not None:
                 cell_info = ""
-                
+
                 # Handle formulas with special attention
                 if cell.data_type == 'f':
                     formulas.append((cell.coordinate, cell.value))
@@ -474,20 +369,20 @@ def build_prompt(sheet):
                     comment_text = f" with comment '{comment_text_processed}'"
 
                 prompt_content += f"- Cell {cell.coordinate} has {cell_info}{comment_text}.\n"
-    
+
     # Add a special section for formulas if any were found
     if formulas:
         prompt_content += "\nFormula Analysis:\n"
         for coord, formula in formulas:
             prompt_content += f"- Formula at {coord}: {formula}\n"
-    
+
     # Check for specific financial patterns
     financial_indicators = []
     for header in headers:
         lower_header = header.lower()
         if any(term in lower_header for term in ['total', 'sum', 'balance', 'account', 'revenue', 'expense', 'profit', 'loss', 'asset', 'liability']):
             financial_indicators.append(header)
-    
+
     if financial_indicators:
         prompt_content += "\nPotential Financial Indicators Found:\n"
         prompt_content += f"- This appears to contain financial data with these indicators: {', '.join(financial_indicators)}\n"
@@ -502,7 +397,7 @@ def get_explanation_from_gemini(prompt, model_name):
     model = genai.GenerativeModel(model_name)
     try:
         response = model.generate_content(
-            prompt, 
+            prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.2,
                 top_p=0.95,
@@ -523,7 +418,7 @@ def get_formula_from_gemini(prompt):
     full_prompt = FORMULA_SYSTEM_PROMPT + "\n\n" + prompt
     try:
         response = model.generate_content(
-            full_prompt, 
+            full_prompt,
             generation_config=genai.types.GenerationConfig(
                 temperature=0.4,
                 top_p=0.95,
@@ -541,16 +436,16 @@ def get_formula_from_gemini(prompt):
 def export_to_docx(explanation, filename=DEFAULT_DOCX_FILENAME):
     """Exports content to a DOCX file in memory and returns BytesIO object."""
     doc = Document()
-    
+
     # Add a title
     doc.add_heading(filename.replace('_', ' ').replace('.docx', '').title(), 0)
-    
+
     # Add date
     doc.add_paragraph(f"Generated on: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    
+
     # Add a horizontal line
     doc.add_paragraph().add_run().add_break()
-    
+
     # Add the content with better formatting
     for line in explanation.splitlines():
         # Check if line is a heading (starts with #)
@@ -592,7 +487,7 @@ def login():
         password = request.form['password']
         user_data = None
         user_id_found = None
-        
+
         # Search for matching username in users dictionary
         for user_id, data in users.items():
             if data['username'] == username:
@@ -602,8 +497,8 @@ def login():
 
         if user_data and check_password_hash(user_data['password_hash'], password):
             user = User(
-                id=user_id_found, 
-                username=username, 
+                id=user_id_found,
+                username=username,
                 password_hash=user_data['password_hash'],
                 is_admin=user_data.get('is_admin', False)
             )
@@ -674,10 +569,10 @@ def index():
             error = 'Invalid file type. Allowed types are xlsx, xls'
 
     response = make_response(render_template(
-        'index.html', 
-        explanation_html=explanation_html, 
-        error=error, 
-        model_name=model_name, 
+        'index.html',
+        explanation_html=explanation_html,
+        error=error,
+        model_name=model_name,
         current_user=current_user
     ))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -728,9 +623,9 @@ def formula_creator():
             error = "Please enter a description for the formula you need."
 
     response = make_response(render_template(
-        'formula_creator.html', 
-        formula_explanation_html=formula_explanation_html, 
-        error=error, 
+        'formula_creator.html',
+        formula_explanation_html=formula_explanation_html,
+        error=error,
         current_user=current_user
     ))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -778,7 +673,7 @@ def chat():
         if user_message:
             # Create a context-aware prompt for the chat
             prompt_context = f"""The user has analyzed an Excel sheet with the following explanation:
-            
+
 {session.get('explanation_markdown')}
 
 CHAT HISTORY:
@@ -786,8 +681,8 @@ CHAT HISTORY:
 
 User's new question: {user_message}
 
-Please provide a helpful, specific response focused on answering the user's question about the Excel sheet. 
-Use Markdown formatting for clarity. If the question can't be answered based on the provided information, 
+Please provide a helpful, specific response focused on answering the user's question about the Excel sheet.
+Use Markdown formatting for clarity. If the question can't be answered based on the provided information,
 politely explain what additional details would be needed."""
 
             llm_response_markdown = get_explanation_from_gemini(prompt_context, DEFAULT_MODEL_NAME)
@@ -801,10 +696,10 @@ politely explain what additional details would be needed."""
             error = "Please enter a chat message."
 
     response = make_response(render_template(
-        'chat.html', 
-        explanation_html=explanation_html, 
-        chat_history=chat_history, 
-        error=error, 
+        'chat.html',
+        explanation_html=explanation_html,
+        chat_history=chat_history,
+        error=error,
         current_user=current_user
     ))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -823,12 +718,12 @@ def export_chat_docx_route():
         return redirect(url_for('chat'))
 
     chat_markdown = "# Excel Analysis Chat History\n\n"
-    
+
     # Add the original explanation for context
     if session.get('explanation_markdown'):
         chat_markdown += "## Original Excel Analysis\n\n"
         chat_markdown += session.get('explanation_markdown') + "\n\n"
-    
+
     chat_markdown += "## Chat History\n\n"
     for i, message in enumerate(chat_history, 1):
         chat_markdown += f"### Conversation {i}\n\n"
@@ -904,10 +799,10 @@ def reconcile():
             error = 'Invalid file types. Allowed types are xlsx, xls for both sheets.'
 
     response = make_response(render_template(
-        'reconcile.html', 
-        reconciliation_explanation_html=reconciliation_explanation_html, 
-        error=error, 
-        current_user=current_user, 
+        'reconcile.html',
+        reconciliation_explanation_html=reconciliation_explanation_html,
+        error=error,
+        current_user=current_user,
         model_name=model_name
     ))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -944,7 +839,7 @@ def export_reconciliation_docx_route():
 def admin():
     """Admin dashboard for managing users and system settings."""
     api_status, api_message = test_api_connection()
-    
+
     # Get system information
     system_info = {
         'api_key_configured': bool(API_KEY),
@@ -957,7 +852,7 @@ def admin():
         'models_available': [DEFAULT_MODEL_NAME, THINKING_MODEL_NAME],
         'user_count': len(users)
     }
-    
+
     # Get user list for admin
     user_list = []
     for user_id, user_data in users.items():
@@ -966,7 +861,7 @@ def admin():
             'username': user_data['username'],
             'is_admin': user_data.get('is_admin', False)
         })
-    
+
     return render_template('admin.html', system_info=system_info, users=user_list, current_user=current_user)
 
 
