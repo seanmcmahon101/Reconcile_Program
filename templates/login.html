@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Excel Analysis Tool</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        :root {
+          --primary: #4361ee;
+          --primary-dark: #3a56d4;
+          --secondary: #2ec4b6;
+          --accent: #ff9f1c;
+          --light: #f8f9fa;
+          --dark: #212529;
+          --gray: #6c757d;
+          --light-gray: #e9ecef;
+          --font-main: 'Roboto', system-ui, -apple-system, sans-serif;
+          --font-header: 'Poppins', 'Segoe UI', sans-serif;
+          --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.05);
+          --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.08);
+          --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.1);
+          --radius-sm: 4px;
+          --radius-md: 8px;
+          --radius-lg: 12px;
+          --transition: all 0.2s ease-in-out;
+        }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: #f5f7fa;
+            color: var(--dark);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        /* Excel Grid Background */
+        .excel-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+            background-size: 80px 25px;
+            background-image:
+                linear-gradient(to right, rgba(220, 220, 220, 0.1) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(220, 220, 220, 0.1) 1px, transparent 1px);
+            opacity: 0.8;
+        }
+        
+        /* Column Headers */
+        .excel-headers {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 25px;
+            z-index: 1;
+            display: flex;
+            background-color: #e9ecef;
+            border-bottom: 1px solid #ced4da;
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .excel-header {
+            width: 80px;
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px solid #ced4da;
+        }
+        
+        /* Row Headers */
+        .excel-rows {
+            position: fixed;
+            top: 25px;
+            left: 0;
+            bottom: 0;
+            width: 40px;
+            z-index: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #e9ecef;
+            border-right: 1px solid #ced4da;
+            font-size: 12px;
+            font-weight: bold;
+            color: #495057;
+        }
+        
+        .excel-row {
+            width: 40px;
+            height: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid #ced4da;
+        }
+        
+        /* Formula Bar */
+        .formula-bar {
+            position: fixed;
+            top: 25px;
+            left: 40px;
+            right: 0;
+            height: 30px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #ced4da;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            font-family: monospace;
+            font-size: 14px;
+            color: #495057;
+            z-index: 1;
+        }
+        
+        .formula-prefix {
+            font-weight: bold;
+            margin-right: 5px;
+        }
+        
+        .formula-content {
+            white-space: nowrap;
+            overflow: hidden;
+            animation: scrollFormula 30s linear infinite;
+        }
+        
+        @keyframes scrollFormula {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
+        }
+        
+        /* Selection Box Animation */
+        .selection-box {
+            position: absolute;
+            width: 80px;
+            height: 25px;
+            border: 2px solid var(--primary);
+            background-color: rgba(67, 97, 238, 0.1);
+            z-index: 2;
+            pointer-events: none;
+        }
+        
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            z-index: 10;
+            position: relative;
+        }
+        
+        .login-card {
+            background-color: white;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            transition: transform 0.3s ease;
+        }
+        
+        .login-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .login-header {
+            background-color: var(--primary);
+            color: white;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        
+        .login-title {
+            font-family: var(--font-header);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .login-subtitle {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+        
+        .login-body {
+            padding: 2rem;
+        }
+        
+        .input-group {
+            margin-bottom: 1rem;
+        }
+        
+        .input-group-text {
+            background-color: var(--light);
+            border-color: var(--light-gray);
+        }
+        
+        .form-control {
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            padding: 0.75rem 1rem;
+            border-color: var(--light-gray);
+        }
+        
+        .form-control:focus {
+            box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.25);
+            border-color: var(--primary);
+        }
+        
+        .btn-login {
+            background-color: var(--primary);
+            border-color: var(--primary);
+            border-radius: var(--radius-sm);
+            padding: 0.75rem 1rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            width: 100%;
+            margin-top: 1rem;
+        }
+        
+        .btn-login:hover {
+            background-color: var(--primary-dark);
+            border-color: var(--primary-dark);
+        }
+        
+        .alert {
+            border-radius: var(--radius-sm);
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .animated-icon {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.1);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Excel Background -->
+    <div class="excel-bg"></div>
+    
+    <!-- Excel Column Headers -->
+    <div class="excel-headers">
+        <div class="excel-header"></div> <!-- Empty corner cell -->
+        <div class="excel-header">A</div>
+        <div class="excel-header">B</div>
+        <div class="excel-header">C</div>
+        <div class="excel-header">D</div>
+        <div class="excel-header">E</div>
+        <div class="excel-header">F</div>
+        <div class="excel-header">G</div>
+        <div class="excel-header">H</div>
+        <div class="excel-header">I</div>
+        <div class="excel-header">J</div>
+        <div class="excel-header">K</div>
+        <div class="excel-header">L</div>
+        <div class="excel-header">M</div>
+        <div class="excel-header">N</div>
+        <div class="excel-header">O</div>
+        <div class="excel-header">P</div>
+        <!-- Add more headers as needed -->
+    </div>
+    
+    <!-- Excel Row Headers -->
+    <div class="excel-rows">
+        <div class="excel-row">1</div>
+        <div class="excel-row">2</div>
+        <div class="excel-row">3</div>
+        <div class="excel-row">4</div>
+        <div class="excel-row">5</div>
+        <div class="excel-row">6</div>
+        <div class="excel-row">7</div>
+        <div class="excel-row">8</div>
+        <div class="excel-row">9</div>
+        <div class="excel-row">10</div>
+        <div class="excel-row">11</div>
+        <div class="excel-row">12</div>
+        <div class="excel-row">13</div>
+        <div class="excel-row">14</div>
+        <div class="excel-row">15</div>
+        <div class="excel-row">16</div>
+        <div class="excel-row">17</div>
+        <div class="excel-row">18</div>
+        <div class="excel-row">19</div>
+        <div class="excel-row">20</div>
+        <!-- Add more rows as needed -->
+    </div>
+    
+    <!-- Formula Bar -->
+    <div class="formula-bar">
+        <span class="formula-prefix">=</span>
+        <span class="formula-content">
+            VLOOKUP(UserCredentials, Users!A:C, 3, FALSE), IF(AND(IsValidUser, IsValidPassword), "Login Successful", "Access Denied"), NOW(), CONCATENATE("Welcome, ", UserName), SUMIFS(Data!C:C, Data!A:A, UserID, Data!B:B, "Complete"), COUNTIFS(Tasks!A:A, UserID, Tasks!B:B, "Pending")
+        </span>
+    </div>
+    
+    <!-- Animated Selection Box -->
+    <div class="selection-box" id="selectionBox"></div>
+    
+    <div class="container login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <i class="fas fa-table fa-3x mb-3 animated-icon"></i>
+                <h2 class="login-title">Excel Analysis Tool</h2>
+                <p class="login-subtitle">Please log in to access the system</p>
+            </div>
+            <div class="login-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else 'info' }}">
+                            <i class="fas {{ 'fa-exclamation-triangle' if category == 'error' else 'fa-info-circle' }} mr-2"></i>
+                            {{ message }}
+                        </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+                
+                <form method="POST" action="/login">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">
+                                <i class="fas fa-user"></i>
+                            </span>
+                        </div>
+                        <input type="text" class="form-control" id="username" name="username" placeholder="Username" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text">
+                                <i class="fas fa-lock"></i>
+                            </span>
+                        </div>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="Password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-login">
+                        <i class="fas fa-sign-in-alt mr-2"></i> Log In
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Excel selection box animation
+        document.addEventListener('DOMContentLoaded', function() {
+            const selectionBox = document.getElementById('selectionBox');
+            const startCell = { row: 1, col: 0 }; // Starting at A1 (accounting for row header)
+            
+            // Create a list of cells to animate through
+            const cellPath = [
+                { row: 1, col: 2 }, // B1
+                { row: 1, col: 3 }, // C1
+                { row: 2, col: 3 }, // C2
+                { row: 3, col: 3 }, // C3
+                { row: 3, col: 4 }, // D3
+                { row: 3, col: 5 }, // E3
+                { row: 4, col: 5 }, // E4
+                { row: 5, col: 5 }, // E5
+                { row: 5, col: 4 }, // D5
+                { row: 5, col: 3 }, // C5
+                { row: 5, col: 2 }, // B5
+                { row: 6, col: 2 }, // B6
+                { row: 7, col: 2 }, // B7
+                { row: 7, col: 3 }, // C7
+                { row: 7, col: 4 }, // D7
+                { row: 8, col: 4 }, // D8
+                { row: 9, col: 4 }, // D9
+                { row: 9, col: 5 }, // E9
+                { row: 9, col: 6 }, // F9
+                { row: 8, col: 6 }, // F8
+                { row: 7, col: 6 }, // F7
+                { row: 6, col: 6 }, // F6
+                { row: 5, col: 6 }, // F5
+                { row: 4, col: 6 }, // F4
+                { row: 3, col: 6 }, // F3
+                { row: 2, col: 6 }, // F2
+                { row: 1, col: 6 }, // F1
+                { row: 1, col: 5 }, // E1
+                { row: 1, col: 4 }, // D1
+                { row: 1, col: 3 }, // C1
+                { row: 1, col: 2 }  // B1 (back to start)
+            ];
+            
+            let currentCellIndex = 0;
+            
+            function animateSelection() {
+                const cell = cellPath[currentCellIndex];
+                
+                // Calculate position (40px for row headers, 80px for columns, 25px height)
+                // Add 25px to top position to account for column headers
+                const top = (cell.row * 25) + 30; // +30 for column headers and formula bar
+                const left = (cell.col * 80) + 40; // +40 for row headers
+                
+                // Apply position
+                selectionBox.style.top = `${top}px`;
+                selectionBox.style.left = `${left}px`;
+                
+                // Move to next cell in path
+                currentCellIndex = (currentCellIndex + 1) % cellPath.length;
+                
+                // Continue animation
+                setTimeout(animateSelection, 800);
+            }
+            
+            // Start animation
+            animateSelection();
+        });
+    </script>
+</body>
+</html>

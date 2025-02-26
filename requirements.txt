@@ -1,0 +1,8 @@
+Flask
+Werkzeug
+openpyxl
+google-generativeai
+markdown
+python-docx
+Flask-Login
+gunicorn
